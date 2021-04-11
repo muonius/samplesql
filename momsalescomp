@@ -18,8 +18,8 @@ b.full_date as date
 ,c.week_of_year fiscal_week
 ,c.month fiscal_month
 ,c.year fiscal_year
-from br_date b
-left join 445_calendar c on b.full_date=c.date
+from calendar_b b
+left join calendar_c c on b.full_date=c.date
 where full_date between '2019-08-01' and [CURRENT_TIMESTAMP:hest:day]
 order by full_date)
 
@@ -54,17 +54,17 @@ order by date, hour
 select [o.purchased_at:hest:day] as date
 ,[o.purchased_at:hest:hour] hour
 ,extract(hour from convert_timezone('America/New_York', o.purchased_at)) as hour_num
-,coalesce(sum((o.price_cents + o.shipping_cents+coalesce(o.instant_ship_markup_fee_cents,0))/100.0),0) as GMV
-,case when [o.purchased_at:hest:day]<'2020-10-07' then 0 else coalesce(sum(case when coalesce(o.instant_ship_markup_fee_cents,0)=0 then o.price_cents + o.shipping_cents end)/100.0,0) end as lowest_GMV
-,case when [o.purchased_at:hest:day]<'2020-10-07' then coalesce(sum((o.price_cents + o.shipping_cents)/100.0),0) else coalesce(sum(case when coalesce(o.instant_ship_markup_fee_cents,0)>0 then o.price_cents + o.shipping_cents+coalesce(o.instant_ship_markup_fee_cents,0) end)/100.0,0) end as fty_GMV
+,coalesce(sum((o.price_cents + o.shipping_cents+coalesce(o.service_fee_cents,0))/100.0),0) as GMV
+,case when [o.purchased_at:hest:day]<'2020-10-07' then 0 else coalesce(sum(case when coalesce(o.service_fee_cents,0)=0 then o.price_cents + o.shipping_cents end)/100.0,0) end as lowest_GMV
+,case when [o.purchased_at:hest:day]<'2020-10-07' then coalesce(sum((o.price_cents + o.shipping_cents)/100.0),0) else coalesce(sum(case when coalesce(o.service_fee_cents,0)>0 then o.price_cents + o.shipping_cents+coalesce(o.service_fee_cents,0) end)/100.0,0) end as fty_GMV
 ,count(case when p.user_id <> o.user_id and o.price_cents > 0 then o.id end) as Orders
-,case when [o.purchased_at:hest:day]<'2020-10-07' then 0 else count (case when p.user_id <> o.user_id and o.price_cents > 0 and coalesce(o.instant_ship_markup_fee_cents,0)=0 then o.id end) end as lowest_orders
-,case when [o.purchased_at:hest:day]<'2020-10-07' then count(case when p.user_id <> o.user_id and o.price_cents > 0 then o.id end) else coalesce(count (case when p.user_id <> o.user_id and o.price_cents > 0 and coalesce(o.instant_ship_markup_fee_cents,0)>0 then o.id end),0) end as fty_orders
+,case when [o.purchased_at:hest:day]<'2020-10-07' then 0 else count (case when p.user_id <> o.user_id and o.price_cents > 0 and coalesce(o.service_fee_cents,0)=0 then o.id end) end as lowest_orders
+,case when [o.purchased_at:hest:day]<'2020-10-07' then count(case when p.user_id <> o.user_id and o.price_cents > 0 then o.id end) else coalesce(count (case when p.user_id <> o.user_id and o.price_cents > 0 and coalesce(o.service_fee_cents,0)>0 then o.id end),0) end as fty_orders
 from orders o
 join products p on p.id = o.product_id
 join product_templates pt on pt.id = p.product_template_id
 left join shipping_infos as sb on sb.id = o.to_buyer_shipping_info_id
-where o.status not in ('canceled_by_buyer', 'fraudulent', 'goat_review', 'goat_review_risk_rejected', 'goat_review_skipped',
+where o.status not in ('canceled_by_buyer', 'fraudulent',
 'pending', 'processing_payment', 'purchase_failed')
 and o.sales_channel_id = 2
 and [o.purchased_at:hest:day] between '2019-08-01' and [CURRENT_TIMESTAMP:hest:day]
@@ -105,21 +105,21 @@ order by 2)
 
 ,sales as
 (select
-coalesce(fc1.date,fc2.date) as date
-,coalesce(fc1.hour,fc2.hour) as hour
-,case when len(coalesce(fc1.hour_num,fc2.hour_num))=1 then '0'||coalesce(fc1.hour_num,fc2.hour_num)::text else coalesce(fc1.hour_num,fc2.hour_num)::text end as hour_num
-,coalesce(fc1.date,fc2.date)||'-'|| case when len(coalesce(fc1.hour_num,fc2.hour_num))=1 then '0'||coalesce(fc1.hour_num,fc2.hour_num)::text else coalesce(fc1.hour_num,fc2.hour_num)::text end as hour_key
-,coalesce(fc1.gmv,0)+coalesce(fc2.gmv, 0) gmv
-,coalesce(fc1.lowest_gmv,0)+coalesce(fc2.lowest_gmv, 0) lowest_gmv
-,coalesce(fc1.fty_gmv,0)+coalesce(fc2.fty_gmv, 0) fty_gmv
-,coalesce(fc1.orders,0)+coalesce(fc2.orders, 0) orders
-,coalesce(fc1.lowest_orders,0)+coalesce(fc2.lowest_orders, 0) lowest_orders
-,coalesce(fc1.fty_orders,0)+coalesce(fc2.fty_orders, 0) fty_orders
-,(coalesce(fc1.gmv,0)+coalesce(fc2.gmv, 0))::float/nullif(coalesce(fc1.orders,0)+coalesce(fc2.orders, 0),0) aov
-,coalesce((coalesce(fc1.lowest_gmv,0)+coalesce(fc2.lowest_gmv,0))::float/nullif(coalesce(fc1.lowest_orders,0)+coalesce(fc2.lowest_orders, 0),0),0) lowest_aov
-,(coalesce(fc1.fty_gmv,0)+coalesce(fc2.fty_gmv, 0))::float/nullif(coalesce(fc1.fty_orders,0)+coalesce(fc2.fty_orders, 0),0) fty_aov
-from sales1 fc1
-full outer join sales2 fc2 on fc1.hour = fc2.hour
+coalesce(s1.date,s2.date) as date
+,coalesce(s1.hour,s2.hour) as hour
+,case when len(coalesce(s1.hour_num,s2.hour_num))=1 then '0'||coalesce(s1.hour_num,s2.hour_num)::text else coalesce(s1.hour_num,s2.hour_num)::text end as hour_num
+,coalesce(s1.date,s2.date)||'-'|| case when len(coalesce(s1.hour_num,s2.hour_num))=1 then '0'||coalesce(s1.hour_num,s2.hour_num)::text else coalesce(s1.hour_num,s2.hour_num)::text end as hour_key
+,coalesce(s1.gmv,0)+coalesce(s2.gmv, 0) gmv
+,coalesce(s1.lowest_gmv,0)+coalesce(s2.lowest_gmv, 0) lowest_gmv
+,coalesce(s1.fty_gmv,0)+coalesce(s2.fty_gmv, 0) fty_gmv
+,coalesce(s1.orders,0)+coalesce(s2.orders, 0) orders
+,coalesce(s1.lowest_orders,0)+coalesce(s2.lowest_orders, 0) lowest_orders
+,coalesce(s1.fty_orders,0)+coalesce(s2.fty_orders, 0) fty_orders
+,(coalesce(s1.gmv,0)+coalesce(s2.gmv, 0))::float/nullif(coalesce(s1.orders,0)+coalesce(s2.orders, 0),0) aov
+,coalesce((coalesce(s1.lowest_gmv,0)+coalesce(s2.lowest_gmv,0))::float/nullif(coalesce(s1.lowest_orders,0)+coalesce(s2.lowest_orders, 0),0),0) lowest_aov
+,(coalesce(s1.fty_gmv,0)+coalesce(s2.fty_gmv, 0))::float/nullif(coalesce(s1.fty_orders,0)+coalesce(s2.fty_orders, 0),0) fty_aov
+from sales1 s1
+full outer join sales2 s2 on s1.hour = s2.hour
 order by 2)
 
 
@@ -169,8 +169,7 @@ where hour_key<=(select hour_key from sales_now)
 and day_month_hour<=(select day_month_hour from sales_now)
 group by 1,2,3)
 
-,summary as
-(select
+select
 fiscal_year_month
 ,mtd_hour tm_mtd_hour
 ,gmv as tm_gmv
@@ -204,4 +203,4 @@ fiscal_year_month
 ,lag(fty_aov,12) over (order by mtd) ly_fty_aov
 from monthly
 order by mtd desc
-limit 1)
+limit 1
