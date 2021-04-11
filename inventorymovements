@@ -15,7 +15,6 @@
 	join variants as v on s.variant_id = v.id
 	join products as p on v.product_id = p.id
 	where warehouse is not null
-	and o.srl_id is not null and o.srl_id<>'0000000000000'
 	and event_family='location' and event_name='create'
 	and (message like '%CON-A_1_1%' or message like '%BUY-A_1_1%' or message like '%DROPSHIP-A_1_1%' or message like '%WAREHOUSE-A_1_1%')
 	and [timestamp:hpst:day]>='2019-01-01' and [s.received_at:hpst:day]>='2019-01-01'--*this is to prevent ops re-assigning old shoes to the consignment location
@@ -23,9 +22,6 @@
 	and s.deleted_at is null
 	order by o.srl_id, event_date desc)
 	
-
-	
-
 	,listings as
 	(select
 	event_family
@@ -47,8 +43,7 @@
 	and [timestamp:hpst:day]>='2018-03-01'
 	and p.type = 'Shoe'
 	and s.deleted_at is null
-	order by o.srl_id)
-	
+	order by o.srl_id)	
 
 	,activation as
 	(select
@@ -64,7 +59,6 @@
 	from listings
 	where event_rank=1)
 	
-
 	,transout as
 	(select
 	event_family
@@ -84,10 +78,7 @@
 	and event_family='stock-transfer' and event_name='assigned'
 	and p.type = 'Shoe'
 	and s.deleted_at is null
-	order by o.srl_id, event_date desc)
-	
-
-	
+	order by o.srl_id, event_date desc)	
 
 	,transin as
 	(select
@@ -110,7 +101,6 @@
 	and s.deleted_at is null
 	order by o.srl_id, event_date desc)
 	
-
 	,withdrawn as
 	(select
 	o.event_family
@@ -137,7 +127,6 @@
 	and s.deleted_at is null
 	order by o.srl_id, event_date desc)
 	
-
 	,removed as
 	(select
 	o.event_family
@@ -163,7 +152,6 @@
 	and s.state in ('withdrawn','removed')
 	and s.deleted_at is null
 	order by o.srl_id, event_date desc)
-	
 
 	,writeoff as
 	(select
@@ -185,10 +173,7 @@
 	and [timestamp:hpst:day]>='2019-01-01'
 	and p.type = 'Shoe'
 	and s.deleted_at is null and s.state='sold'
-	order by o.srl_id, event_date desc)
-	
-
-	
+	order by o.srl_id, event_date desc)	
 
 	,rcv_sum as
 	(select
@@ -200,7 +185,6 @@
 	group by 1,2
 	order by date desc)
 	
-
 	,sold_sum as
 	(select
 	[o.purchased_at:hpst:day] as date
@@ -222,7 +206,6 @@
 	group by 1,2
 	order by 1 desc)
 	
-
 	,wtdn_sum as
 	(select
 	event_date as date
@@ -231,8 +214,7 @@
 	from withdrawn
 	where [event_date=DateRange]
 	group by 1,2
-	order by date desc)
-	
+	order by date desc)	
 
 	,rmv_sum as
 	(select
@@ -244,7 +226,6 @@
 	group by 1,2
 	order by date desc)
 	
-
 	,off_sum as
 	(select
 	event_date as date
@@ -255,7 +236,6 @@
 	group by 1,2
 	order by date desc)
 	
-
 	,out_sum as
 	(select
 	event_date as date
@@ -266,7 +246,6 @@
 	group by 1,2
 	order by date desc)
 	
-
 	,in_sum as
 	(select
 	event_date as date
@@ -275,8 +254,7 @@
 	from transin
 	where [event_date=DateRange]
 	group by 1,2
-	order by date desc)
-	
+	order by date desc)	
 
 	,on_hand as
 	(select [CURRENT_TIMESTAMP:hest:day] as date
@@ -288,9 +266,6 @@
 	and s.state in ('on_sale','on_hold')
 	group by 1,2)
 	
-
-	
-
 	,summary1 as
 	(select
 	coalesce(rs.date,ss.date,ws.date,rms.date, os.date,ins.date,ofs.date,oh.date) as date
@@ -313,9 +288,6 @@
 	full join on_hand oh on rs.date=oh.date and rs.warehouse=oh.warehouse
 	order by date desc)
 	
-
-	
-
 	,final as
 	(select
 	date
@@ -340,7 +312,6 @@
 	group by 1
 	order by 1 desc, total_inbound desc)
 	
-
 	,cal as
 	(select
 	f1.date as date
@@ -364,7 +335,6 @@
 	group by 1,2,3,4,5,6,7,8,9,10,11,12,13
 	order by 1 desc)
 	
-
 	select
 	date
 	,beg_balance
