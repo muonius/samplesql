@@ -37,10 +37,8 @@
 	left join items s on s.srl_id=o.srl_id
 	join variants as v on s.variant_id = v.id
 	join products as p on v.product_id = p.id
-	where warehouse is not null
+	where 1=1
 	and o.srl_id is not null and o.srl_id<>'0000000000000'
-	and ((event_family='inventory' and event_name='release!' and message like '%approved to on_sale%') or (event_family='inventory' and event_name='approve!' and message like '%received to on_sale%') or (case when warehouse='JP' then event_family='inventory' and event_name='list!' end))
-	and [timestamp:hpst:day]>='2018-03-01'
 	and p.type = 'Shoe'
 	and s.deleted_at is null
 	order by o.srl_id)	
