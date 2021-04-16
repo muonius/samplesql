@@ -1,22 +1,21 @@
 	
---no_cache
-	with receipt as
+	with received as
 	(select
 	event_family
 	,event_name
 	,o.srl_id
-	,s.id stockid
+	,s.id itemid
 	,message
 	,s.user_id
 	,warehouse
 	,[timestamp:hpst:day] as event_date
-	from operations_log o
+	from items_log o
 	left join items s on s.srl_id=o.srl_id
-	join variants as v on s.variant_id = v.id
-	join products as p on v.product_id = p.id
+	join category_variants as v on s.v_id = v.id
+	join product_master as p on v.product_id = p.id
 	where warehouse is not null
 	and event_family='location' and event_name='create'
-	and (message like '%CON-A_1_1%' or message like '%BUY-A_1_1%' or message like '%DROPSHIP-A_1_1%' or message like '%WAREHOUSE-A_1_1%')
+	and (message like '%CON-A_2_3%' or message like '%BUY-A_2_3%' or message like '%DSHIP-A_2_3%' or message like '%WAREHOUSE-A_2_3%')
 	and [timestamp:hpst:day]>='2019-01-01' and [s.received_at:hpst:day]>='2019-01-01'--*this is to prevent ops re-assigning old shoes to the consignment location
 	and p.type = 'Shoe'
 	and s.deleted_at is null
@@ -27,16 +26,16 @@
 	event_family
 	,event_name
 	,o.srl_id
-	,s.id stockid
+	,s.id itemid
 	,message
 	,s.user_id
 	,warehouse
 	,[timestamp:hpst] as timestamp
 	,rank() over(partition by o.srl_id order by timestamp asc) as event_rank
-	from operations_log o
+	from items_log o
 	left join items s on s.srl_id=o.srl_id
-	join variants as v on s.variant_id = v.id
-	join products as p on v.product_id = p.id
+	join category_variants as v on s.v_id = v.id
+	join product_master as p on v.product_id = p.id
 	where 1=1
 	and o.srl_id is not null and o.srl_id<>'0000000000000'
 	and p.type = 'Shoe'
@@ -45,7 +44,7 @@
 
 	,activation as
 	(select
-	distinct stockid
+	distinct itemid
 	,srl_id
 	,event_family
 	,event_name
@@ -57,7 +56,7 @@
 	from listings
 	where event_rank=1)
 	
-	,transout as
+	,sentout as
 	(select
 	event_family
 	,event_name
@@ -67,10 +66,10 @@
 	,warehouse as out_warehouse
 	,[timestamp:hpst:day] as event_date
 	--,rank() over(partition by srl_id order by timestamp asc) as event_rank
-	from operations_log o
+	from items_log o
 	left join items s on s.srl_id=o.srl_id
-	join variants as v on s.variant_id = v.id
-	join products as p on v.product_id = p.id
+	join category_variants as v on s.v_id = v.id
+	join product_master as p on v.product_id = p.id
 	where warehouse is not null
 	and o.srl_id is not null and o.srl_id<>'0000000000000'
 	and event_family='stock-transfer' and event_name='assigned'
@@ -78,7 +77,7 @@
 	and s.deleted_at is null
 	order by o.srl_id, event_date desc)	
 
-	,transin as
+	,sentin as
 	(select
 	event_family
 	,event_name
@@ -88,10 +87,10 @@
 	,warehouse as in_warehouse
 	,[timestamp:hpst:day] as event_date
 	--,rank() over(partition by srl_id order by timestamp asc) as event_rank
-	from operations_log o
+	from items_log o
 	left join items s on s.srl_id=o.srl_id
-	join variants as v on s.variant_id = v.id
-	join products as p on v.product_id = p.id
+	join category_variants as v on s.v_id = v.id
+	join product_master as p on v.product_id = p.id
 	where warehouse is not null
 	and o.srl_id is not null and o.srl_id<>'0000000000000'
 	and event_family='location' and event_name like '%warehouse-change%' and warehouse<>'IN TRANSIT'
@@ -110,14 +109,14 @@
 	,[o.timestamp:hpst:day] as event_date
 	,a.activated_at
 	--,rank() over(partition by srl_id order by timestamp asc) as event_rank
-	from operations_log o
+	from items_log o
 	left join items s on s.srl_id=o.srl_id
-	join variants as v on s.variant_id = v.id
-	join products as p on v.product_id = p.id
+	join category_variants as v on s.v_id = v.id
+	join product_master as p on v.product_id = p.id
 	left join activation a on a.srl_id=o.srl_id
 	where o.warehouse is not null
 	and o.srl_id is not null and o.srl_id<>'0000000000000'
-	and o.event_family='location' and o.event_name='create' and o.message like '%WITHDRAWN-A_1_1%'
+	and o.event_family='location' and o.event_name='create' and o.message like '%WITHDRAWN-A_2_3%'
 	and s.withdrawn_at>a.activated_at ---post activation withdrawn = true seller withdrawn
 	and [o.timestamp:hpst:day]>='2019-01-01'
 	and p.type = 'Shoe'
@@ -136,14 +135,14 @@
 	,[o.timestamp:hpst:day] as event_date
 	,a.activated_at
 	--,rank() over(partition by srl_id order by timestamp asc) as event_rank
-	from operations_log o
+	from items_log o
 	left join items s on s.srl_id=o.srl_id
-	join variants as v on s.variant_id = v.id
-	join products as p on v.product_id = p.id
+	join category_variants as v on s.v_id = v.id
+	join product_master as p on v.product_id = p.id
 	left join activation a on a.srl_id=o.srl_id
 	where o.warehouse is not null
 	and o.srl_id is not null and o.srl_id<>'0000000000000'
-	and ((o.event_family='location' and o.event_name='create' and o.message like '%WITHDRAWN-A_1_1%' and (s.withdrawn_at<=a.activated_at or a.activated_at is null))
+	and ((o.event_family='location' and o.event_name='create' and o.message like '%WITHDRAWN-A_2_3%' and (s.withdrawn_at<=a.activated_at or a.activated_at is null))
 	or (o.event_family='inventory' and o.event_name='remove!')) 
 	and [o.timestamp:hpst:day]>='2019-01-01'
 	and p.type = 'Shoe'
@@ -161,10 +160,10 @@
 	,warehouse
 	,[timestamp:hpst:day] as event_date
 	--,rank() over(partition by srl_id order by timestamp asc) as event_rank
-	from operations_log o
+	from items_log o
 	left join items s on s.srl_id=o.srl_id
-	join variants as v on s.variant_id = v.id
-	join products as p on v.product_id = p.id
+	join category_variants as v on s.v_id = v.id
+	join product_master as p on v.product_id = p.id
 	where warehouse is not null
 	and o.srl_id is not null and o.srl_id<>'0000000000000'
 	and event_family='inventory' and event_name='write_off!'
@@ -178,7 +177,7 @@
 	event_date as date
 	,warehouse
 	,count(distinct srl_id) as units
-	from receipt
+	from received
 	where [event_date=DateRange]
 	group by 1,2
 	order by date desc)
@@ -192,7 +191,7 @@
 	-- ,(sum(o.price_cents/100.0))::numeric(12,2)/nullif(count(case when p.user_id <> o.user_id and o.price_cents > 0 then p.id end),0) as cl_aov
 	,count(distinct p.id) as units
 	from orders as o
-	join products as p on
+	join product_master as p on
 	o.product_id = p.id
 	join product_templates pt on
 	p.product_template_id = pt.id
@@ -239,7 +238,7 @@
 	event_date as date
 	,out_warehouse
 	,count(distinct srl_id) as units
-	from transout
+	from sentout
 	where [event_date=DateRange]
 	group by 1,2
 	order by date desc)
@@ -249,7 +248,7 @@
 	event_date as date
 	,in_warehouse
 	,count(distinct srl_id) as units
-	from transin
+	from sentsin
 	where [event_date=DateRange]
 	group by 1,2
 	order by date desc)	
@@ -269,11 +268,11 @@
 	coalesce(rs.date,ss.date,ws.date,rms.date, os.date,ins.date,ofs.date,oh.date) as date
 	,coalesce(rs.warehouse,ss.warehouse,ws.warehouse,rms.warehouse, os.out_warehouse,ins.in_warehouse,ofs.warehouse,oh.warehouse) as warehouse
 	,rs.units as rcv_units
-	,ins.units as transin_units
+	,ins.units as sentin_units
 	,ss.units as sold_units
 	,ws.units as wtdn_units
 	,rms.units as rmv_units
-	,os.units as transout_units
+	,os.units as sentout_units
 	,ofs.units as writeoff_units
 	,oh.units as oh_units
 	from rcv_sum rs
@@ -294,17 +293,17 @@
 	--when lower(warehouse) like '%warehouse%' then 'DROP-SHIP' --or when lower(warehouse) like '%dropship%' or when lower(warehouse)='t') then 'DROP-SHIP'
 	--when lower(warehouse) is null then 'NULL' else warehouse end as wh_name
 	,coalesce(sum(rcv_units),0) rcv_units
-	,coalesce(sum(transin_units),0) transin_units
+	,coalesce(sum(sentin_units),0) sentin_units
 	,coalesce(sum(sold_units),0) sold_units
 	,coalesce(sum(wtdn_units),0) withdrawn_units
 	,coalesce(sum(rmv_units),0) removed_units
-	,coalesce(sum(transout_units),0) transout_units
+	,coalesce(sum(sentout_units),0) sentout_units
 	,coalesce(sum(writeoff_units),0) writeoff_units
 	,coalesce(sum(oh_units),0) as on_hand_units
-	,coalesce(sum(rcv_units),0)+coalesce(sum(transin_units),0) total_inbound
-	,coalesce(sum(sold_units),0)+coalesce(sum(wtdn_units),0)+coalesce(sum(rmv_units),0)+coalesce(sum(writeoff_units),0)+coalesce(sum(transout_units),0) total_outbound
+	,coalesce(sum(rcv_units),0)+coalesce(sum(sentin_units),0) total_inbound
+	,coalesce(sum(sold_units),0)+coalesce(sum(wtdn_units),0)+coalesce(sum(rmv_units),0)+coalesce(sum(writeoff_units),0)+coalesce(sum(sentout_units),0) total_outbound
 	--,coalesce(sum(activate_units),0) total_activation
-	,coalesce(sum(oh_units),0)+coalesce(sum(sold_units),0)+coalesce(sum(wtdn_units),0)+coalesce(sum(rmv_units),0)+coalesce(sum(transout_units),0)+coalesce(sum(writeoff_units),0)-coalesce(sum(rcv_units),0)-coalesce(sum(transin_units),0) boh_var
+	,coalesce(sum(oh_units),0)+coalesce(sum(sold_units),0)+coalesce(sum(wtdn_units),0)+coalesce(sum(rmv_units),0)+coalesce(sum(sentout_units),0)+coalesce(sum(writeoff_units),0)-coalesce(sum(rcv_units),0)-coalesce(sum(sentin_units),0) boh_var
 	from summary1
 	where [warehouse=warehouse_filter] - 
 	group by 1
@@ -321,8 +320,8 @@
 	,f1.boh_var
 	,f1.sold_units
 	,f1.removed_units
-	,f1.transin_units
-	,f1.transout_units
+	,f1.sentin_units
+	,f1.sentout_units
 	,f1.withdrawn_units
 	,f1.writeoff_units
 	,sum(f2.boh_var) beg_balance
@@ -339,9 +338,9 @@
 	,rcv_units receipts
 	-- ,total_inbound as inbound
 	,sold_units
-	,withdrawn_units as retrieved_units
-	,transout_units
-	,transin_units
+	,withdrawn_units
+	,sentout_units
+	,sentin_units
 	,removed_units
 	,writeoff_units
 	,total_outbound
